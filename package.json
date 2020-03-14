@@ -1,0 +1,38 @@
+{
+  "name": "prince-shotoku",
+  "version": "1.0.0",
+  "description": "Listen to all public channel message and post them in one place",
+  "engines": {
+    "node": "12.x"
+  },
+  "scripts": {
+    "prebuild": "npm run lint",
+    "build": "tsc -p tsconfig.json",
+    "start": "node out/main.js",
+    "lint": "eslint --ext .ts src/",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "github.com:givery-technology/prince-shotoku.git"
+  },
+  "keywords": [
+    "slack",
+    "bot",
+    "bolt"
+  ],
+  "author": "takayukioda",
+  "license": "MIT",
+  "dependencies": {
+    "@slack/bolt": "^1.7.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^2.23.0",
+    "@typescript-eslint/parser": "^2.23.0",
+    "eslint": "^6.8.0",
+    "eslint-config-airbnb-typescript": "^7.0.0",
+    "eslint-plugin-import": "^2.20.1",
+    "eslint-plugin-promise": "^4.1.1",
+    "typescript": "^3.8.3"
+  }
+}
