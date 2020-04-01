@@ -3,7 +3,7 @@
     "baseUrl": ".",
     "module": "commonjs",
     "moduleResolution": "node",
-    "outDir": "out",
+    "outDir": "dist",
     "target": "es2017",
 
     "allowSyntheticDefaultImports": true,

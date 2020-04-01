@@ -8,7 +8,8 @@
   "scripts": {
     "prebuild": "npm run lint",
     "build": "tsc -p tsconfig.json",
-    "start": "node out/main.js",
+    "start": "node dist/main.js",
+    "start:dev": "npm run build && npm run start",
     "lint": "eslint --ext .ts src/",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
