@@ -82,5 +82,14 @@ app.error((error) => {
 
 (async (): Promise<void> => {
   await app.start(process.env.PORT || 3000);
+  const conversations = []
+  const options = {
+    token: process.env.SLACK_BOT_TOKEN,
+    exclude_archived: true,
+    limit: 100,
+  }
+  for await (const page of app.client.paginate('conversations.list', options)) {
+    conversations.push(...page.channels)
+  }
   console.log('⚡️ Bolt app is running!');
 })();
