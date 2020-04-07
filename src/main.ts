@@ -1,6 +1,31 @@
 import { App, LogLevel } from '@slack/bolt';
 import { WebAPICallResult } from '@slack/web-api'
 
+interface Profile {
+  real_name: string
+  display_name: string
+  avatar_hash: string
+  image_24: string
+  image_32: string
+  image_48: string
+  image_72: string
+  image_192: string
+  image_512: string
+  image_1024?: string
+}
+interface User {
+  id: string
+  team_id: string
+  name: string
+  deleted: boolean
+  color: string
+  real_name: string
+  profile: Profile
+  is_admin: boolean
+  is_owner: boolean
+  is_bot: boolean
+  is_app_user: boolean
+}
 interface Conversation {
   id: string
   name: string
@@ -23,7 +48,7 @@ const ignore_subtypes = [
 ]
 
 const conversations = []
-// const users = new Map<string, object>()
+const users = new Map<string, User>()
 
 const app = new App({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
@@ -42,20 +67,31 @@ app.event('app_home_opened', ({ event }) => {
 // Listen to any messaging event except bot itself
 app.event('message', async ({ event, context }) => {
 
-  if (ignore_subtypes.includes(event.subtype)) {return; }
+  if (ignore_subtypes.includes(event.subtype)) { return; }
   if (event.bot_id) { return; } // Skip messages by bots
   console.log('message.channels', { event, context });
+  const user = users.get(event.user);
+  if (!user) {
+    throw new Error(`No such user: ${event.user}`);
+  }
+  // Replace specialized text to not make mention text
+  const text = (event.text ?? '').replace(/<@(.*?)>/g, (_, uid) => {
+    const target = users.get(uid) || { name: 'unknown' };
+    return `@${target.name}`;
+  });
+  console.log({ text });
   const blocks = [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: event.text || '',
+      text: text,
+      verbatim: true, // Required to skip mentioning
     },
   }, {
     type: 'context',
     elements: [{
       type: 'mrkdwn',
-      text: `by <@${event.user}> in <#${event.channel}>`,
+      text: `in <#${event.channel}>`,
     }],
   }];
   await app.client.chat.postMessage({
@@ -63,7 +99,8 @@ app.event('message', async ({ event, context }) => {
     token: context.botToken,
     channel: OWNER_CHANNEL_ID,
     text: event.text || '',
-    username: event.user,
+    username: user.name,
+    icon_url: user.profile?.image_512,
   });
 });
 app.event('channel_archive', async ({ event, context }) => {
@@ -128,14 +165,14 @@ app.event('channel_unshared', async ({ event, context }) => {
 
 (async (): Promise<void> => {
   await app.start(process.env.PORT || 3000);
-  const options = {
+  const conv_opts = {
     token: process.env.SLACK_BOT_TOKEN,
     exclude_archived: true,
     limit: 100,
   }
 
   // Interface for `page`: https://api.slack.com/methods/conversations.list#response
-  for await (const page of app.client.paginate('conversations.list', options) as AsyncIterableIterator<WebAPICallResult>) {
+  for await (const page of app.client.paginate('conversations.list', conv_opts) as AsyncIterableIterator<WebAPICallResult>) {
     if (!page.ok) {
       throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`)
     }
@@ -150,9 +187,24 @@ app.event('channel_unshared', async ({ event, context }) => {
         return app.client.conversations.join({
           token: process.env.SLACK_BOT_TOKEN,
           channel: conv.id,
-        })
+        });
       }
-    })
+    });
+
+  const user_opts = {
+    token: process.env.SLACK_BOT_TOKEN,
+    limit: 100,
+  }
+  for await (const page of app.client.paginate('users.list', user_opts) as AsyncIterableIterator<WebAPICallResult>) {
+    if (!page.ok) {
+      throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`)
+    }
+    const members = page.members as User[]
+    members.reduce((m, member) => {
+      m.set(member.id, member);
+      return m;
+    }, users);
+  }
 
   await Promise.all(newJoins)
   console.log('⚡️ Bolt app is running!');
