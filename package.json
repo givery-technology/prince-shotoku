@@ -9,7 +9,7 @@
     "prebuild": "npm run lint",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "start:dev": "npm run build && npm run start",
+    "start:dev": "ts-node-dev --respawn src/main.ts",
     "lint": "eslint --ext .ts src/",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -34,6 +34,7 @@
     "eslint-config-airbnb-typescript": "^7.0.0",
     "eslint-plugin-import": "^2.20.1",
     "eslint-plugin-promise": "^4.1.1",
+    "ts-node-dev": "^1.0.0-pre.44",
     "typescript": "^3.8.3"
   }
 }
