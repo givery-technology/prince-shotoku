@@ -1,4 +1,5 @@
 import { App, LogLevel } from '@slack/bolt';
+import { WebAPICallResult } from '@slack/web-api'
 
 const app = new App({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
@@ -6,7 +7,7 @@ const app = new App({
   logLevel: LogLevel.INFO,
 });
 
-const OWNER_CHANNEL_ID=process.env.OWNER_CHANNEL_ID
+const OWNER_CHANNEL_ID=process.env.OWNER_CHANNEL_ID || ''
 
 app.event('app_home_opened', ({ event }) => {
   console.log('app_home_opened', event);
@@ -88,8 +89,14 @@ app.error((error) => {
     exclude_archived: true,
     limit: 100,
   }
-  for await (const page of app.client.paginate('conversations.list', options)) {
-    conversations.push(...page.channels)
+
+  // Interface for `page`: https://api.slack.com/methods/conversations.list#response
+  for await (const page of app.client.paginate('conversations.list', options) as AsyncIterableIterator<WebAPICallResult>) {
+    if (!page.ok) {
+      throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`)
+    }
+    const channels = page.channels as object[]
+    conversations.push(...channels)
   }
   console.log('⚡️ Bolt app is running!');
 })();
