@@ -11,6 +11,10 @@ module.exports = {
   },
   rules: {
     // Bolt defines properties with snake case; turn it off
-    "@typescript-eslint/camelcase": ["off"]
+    "@typescript-eslint/camelcase": ["off"],
+    "quotes": "off",
+    "@typescript-eslint/quotes": ["error", "single"],
+    "semi": "off",
+    "@typescript-eslint/semi": ["error", "always"],
   }
 }
