@@ -1,0 +1,32 @@
+# Docker compose to simulate production environment
+version: '3.7'
+services:
+  app:
+    build: .
+    networks:
+      - backbone
+    expose:
+      - 9000
+    environment:
+      - OWNER_CHANNEL_ID
+      - SLACK_SIGNING_SECRET
+      - SLACK_BOT_TOKEN
+  nginx:
+    image: givery/nginx-forward-9000:latest
+    networks:
+      - backbone
+    ports:
+      - "9000:80"
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "nc", "-nz", "127.0.0.1", "80"]
+      interval: "20s"
+      timeout: "20s"
+      start_period: "5s"
+      retries: 3
+    environment:
+      APPLICATION_HOST: app
+networks:
+  backbone:
+    driver: bridge
