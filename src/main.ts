@@ -1,51 +1,23 @@
 import { App, LogLevel } from '@slack/bolt';
-import { WebAPICallResult } from '@slack/web-api'
+import { WebAPICallResult } from '@slack/web-api';
+import { Config } from './interfaces';
+import { Conversation, User } from './interfaces/slack';
+import { app_home_opened } from './listeners';
 
-interface Profile {
-  real_name: string
-  display_name: string
-  avatar_hash: string
-  image_24: string
-  image_32: string
-  image_48: string
-  image_72: string
-  image_192: string
-  image_512: string
-  image_1024?: string
-}
-interface User {
-  id: string
-  team_id: string
-  name: string
-  deleted: boolean
-  color: string
-  real_name: string
-  profile: Profile
-  is_admin: boolean
-  is_owner: boolean
-  is_bot: boolean
-  is_app_user: boolean
-}
-interface Conversation {
-  id: string
-  name: string
-  name_normalized: string
-  is_channel: boolean
-  is_group: boolean
-  is_im: boolean
-  is_archived: boolean
-  is_shared: boolean
-  is_member: boolean
-  is_private: boolean
-  is_mpim: boolean
-}
+const config: Config = {
+  owner_channel_id: process.env.OWNER_CHANNEL_ID || '',
+  ignore_subtypes:  [
+    'channel_join',
+    'channel_left',
+    'channel_leave',
+    'message_changed',
+    'message_deleted',
+  ],
+};
 
-const OWNER_CHANNEL_ID = process.env.OWNER_CHANNEL_ID || ''
-const ignore_subtypes = [
-  'channel_join',
-  'channel_left',
-  'message_deleted',
-]
+if (config.owner_channel_id === '') {
+  throw new Error('Must specify owner channel id to run this app');
+}
 
 const conversations = new Map<string, Conversation>();
 const users = new Map<string, User>();
@@ -60,15 +32,16 @@ app.error((error) => {
   console.error(error);
 });
 
-app.event('app_home_opened', ({ event }) => {
-  console.log('app_home_opened', event);
-});
+app.event('app_home_opened', app_home_opened(app, config));
 
 // Listen to any messaging event except bot itself
 app.event('message', async ({ event, context }) => {
+  const {ignore_subtypes} = config;
 
   if (ignore_subtypes.includes(event.subtype)) { return; }
   if (event.bot_id) { return; } // Skip messages by bots
+  if (event.channel === config.owner_channel_id) { return; }
+
   console.log('message.channels', { event, context });
   const user = users.get(event.user);
   if (!user) {
@@ -97,7 +70,7 @@ app.event('message', async ({ event, context }) => {
   await app.client.chat.postMessage({
     blocks,
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
     text: event.text || '',
     username: user.name,
     icon_url: user.profile?.image_512,
@@ -106,7 +79,7 @@ app.event('message', async ({ event, context }) => {
 
 app.event('channel_archive', async ({ event, context }) => {
   console.log('channel_archive', { event, context });
-  if (event.channel === OWNER_CHANNEL_ID) {
+  if (event.channel === config.owner_channel_id) {
     // Not sure the reason, but this logic fails with an error `not_in_channel`
     await app.client.conversations.unarchive({
       token: context.botToken,
@@ -127,7 +100,7 @@ app.event('channel_archive', async ({ event, context }) => {
   await app.client.chat.postMessage({
     text,
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
   });
 });
 app.event('channel_unarchive', async ({ event, context }) => {
@@ -138,7 +111,7 @@ app.event('channel_unarchive', async ({ event, context }) => {
   await app.client.chat.postMessage({
     text,
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
   });
 });
 app.event('channel_created', async ({ event, context }) => {
@@ -147,7 +120,7 @@ app.event('channel_created', async ({ event, context }) => {
   await app.client.chat.postMessage({
     text,
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
   });
   if (event.channel.name.includes('takayukioda')) {
     await app.client.conversations.join({
@@ -164,7 +137,7 @@ app.event('channel_deleted', async ({ event, context }) => {
   await app.client.chat.postMessage({
     text,
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
   });
 });
 app.event('channel_left', async ({ event, context }) => {
@@ -183,7 +156,7 @@ app.event('channel_rename', async ({ event, context }) => {
   console.log('channel_rename', { event, context });
   await app.client.chat.postMessage({
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
     text: `どこかで名が *${event.channel.name}* になったチャンネルがおるのぉ`,
   });
 });
@@ -191,7 +164,7 @@ app.event('channel_shared', async ({ event, context }) => {
   console.log('channel_shared', event);
   await app.client.chat.postMessage({
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
     text: `<#${event.channel}> がどこかのチームと共有されたようだのぉ`,
   });
 });
@@ -199,7 +172,7 @@ app.event('channel_unshared', async ({ event, context }) => {
   console.log('channel_unshared', event);
   await app.client.chat.postMessage({
     token: context.botToken,
-    channel: OWNER_CHANNEL_ID,
+    channel: config.owner_channel_id,
     text: `<#${event.channel}> が他チームとの共有をとめたようだのぉ`,
   });
 });
