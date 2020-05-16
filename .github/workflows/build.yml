@@ -1,11 +1,19 @@
 name: Build project
 on: push
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies including devDependencies
+        env:
+          NODE_ENV: ci
+        run: npm ci
+      - run: npm run lint
   build:
+    needs: [lint]
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    env:
-      NODE_ENV: develop
     steps:
       - uses: actions/checkout@v2
       - name: Configure AWS Credentials
