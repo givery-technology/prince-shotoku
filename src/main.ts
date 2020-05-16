@@ -3,6 +3,7 @@ import { WebAPICallResult } from '@slack/web-api';
 import { Config } from './interfaces';
 import { Conversation, User } from './interfaces/slack';
 import { app_home_opened } from './listeners';
+import { channel_msg } from './resources/messages';
 
 const config: Config = {
   owner_channel_id: process.env.OWNER_CHANNEL_ID || '',
@@ -96,31 +97,28 @@ app.event('channel_archive', async ({ event, context }) => {
   }
   const conv = conversations.get(event.channel);
   if (!conv) { throw new Error(`Unknown channel: ${event.channel}`); }
-  const text = `<#${event.channel}> が閉まったようだのぉ`;
   await app.client.chat.postMessage({
-    text,
-    token: context.botToken,
     channel: config.owner_channel_id,
+    text: channel_msg.archived(event.channel),
+    token: context.botToken,
   });
 });
 app.event('channel_unarchive', async ({ event, context }) => {
   console.log('channel_unarchive', { event, context });
   const conv = conversations.get(event.channel);
   if (!conv) { throw new Error(`Unknown channel: ${event.channel}`); }
-  const text = `<#${event.channel}> が開いたようだのぉ`;
   await app.client.chat.postMessage({
-    text,
-    token: context.botToken,
     channel: config.owner_channel_id,
+    text: channel_msg.unarchived(event.channel),
+    token: context.botToken,
   });
 });
 app.event('channel_created', async ({ event, context }) => {
   console.log('channel_created', event);
-  const text = `<#${event.channel.id}> が新しくできたようだのぉ`;
   await app.client.chat.postMessage({
-    text,
-    token: context.botToken,
     channel: config.owner_channel_id,
+    text: channel_msg.created(event.channel.id),
+    token: context.botToken,
   });
   if (event.channel.name.includes('takayukioda')) {
     await app.client.conversations.join({
@@ -133,11 +131,10 @@ app.event('channel_deleted', async ({ event, context }) => {
   console.log('channel_deleted', { event, context });
   const conv = conversations.get(event.channel);
   if (!conv) { throw new Error(`Unknown channel: ${event.channel}`); }
-  const text = 'どこかでチャンネルが消えたようだのぉ';
   await app.client.chat.postMessage({
-    text,
-    token: context.botToken,
     channel: config.owner_channel_id,
+    text: channel_msg.deleted,
+    token: context.botToken,
   });
 });
 app.event('channel_left', async ({ event, context }) => {
@@ -155,25 +152,25 @@ app.event('channel_left', async ({ event, context }) => {
 app.event('channel_rename', async ({ event, context }) => {
   console.log('channel_rename', { event, context });
   await app.client.chat.postMessage({
-    token: context.botToken,
     channel: config.owner_channel_id,
-    text: `どこかで名が *${event.channel.name}* になったチャンネルがおるのぉ`,
+    text: channel_msg.renamed(event.channel.name),
+    token: context.botToken,
   });
 });
 app.event('channel_shared', async ({ event, context }) => {
   console.log('channel_shared', event);
   await app.client.chat.postMessage({
-    token: context.botToken,
     channel: config.owner_channel_id,
-    text: `<#${event.channel}> がどこかのチームと共有されたようだのぉ`,
+    text: channel_msg.shared(event.channel),
+    token: context.botToken,
   });
 });
 app.event('channel_unshared', async ({ event, context }) => {
   console.log('channel_unshared', event);
   await app.client.chat.postMessage({
-    token: context.botToken,
     channel: config.owner_channel_id,
-    text: `<#${event.channel}> が他チームとの共有をとめたようだのぉ`,
+    text: channel_msg.unshared(event.channel),
+    token: context.botToken,
   });
 });
 
@@ -215,7 +212,7 @@ app.event('channel_unshared', async ({ event, context }) => {
 
   for await (const page of app.client.paginate('users.list', user_opts) as AsyncIterableIterator<WebAPICallResult>) {
     if (!page.ok) {
-      throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`);
+      throw new Error(`users.list was not ok for some reason: ${page.response_metadata}`);
     }
     const members = page.members as User[];
     members.reduce((m, member) => {
