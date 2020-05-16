@@ -47,8 +47,8 @@ const ignore_subtypes = [
   'message_deleted',
 ]
 
-const conversations = []
-const users = new Map<string, User>()
+const conversations = new Map<string, Conversation>();
+const users = new Map<string, User>();
 
 const app = new App({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
@@ -76,10 +76,10 @@ app.event('message', async ({ event, context }) => {
   }
   // Replace specialized text to not make mention text
   const text = (event.text ?? '').replace(/<@(.*?)>/g, (_, uid) => {
-    const target = users.get(uid) || { name: 'unknown' };
-    return `@${target.name}`;
+    const target = users.get(uid) ?? ({ name: 'unknown' } as User);
+    return `@${target.profile?.display_name || target.name}`;
   });
-  console.log({ text });
+  const inThread = event.thread_ts ? 'in thread' : '';
   const blocks = [{
     type: 'section',
     text: {
@@ -91,7 +91,7 @@ app.event('message', async ({ event, context }) => {
     type: 'context',
     elements: [{
       type: 'mrkdwn',
-      text: `in <#${event.channel}>`,
+      text: `${inThread} at <#${event.channel}>`,
     }],
   }];
   await app.client.chat.postMessage({
@@ -103,40 +103,81 @@ app.event('message', async ({ event, context }) => {
     icon_url: user.profile?.image_512,
   });
 });
+
 app.event('channel_archive', async ({ event, context }) => {
   console.log('channel_archive', { event, context });
+  if (event.channel === OWNER_CHANNEL_ID) {
+    // Not sure the reason, but this logic fails with an error `not_in_channel`
+    await app.client.conversations.unarchive({
+      token: context.botToken,
+      channel: event.channel,
+    }).catch((error) => {
+      console.log('unarchive', error.code, error.data.error);
+    });
+    await app.client.conversations.join({
+      token: context.botToken,
+      channel: event.channel,
+    }).catch((error) => {
+      console.log('join', error.code, error.data.error);
+    });
+  }
+  const conv = conversations.get(event.channel);
+  if (!conv) { throw new Error(`Unknown channel: ${event.channel}`); }
+  const text = `<#${event.channel}> が閉まったようだのぉ`;
   await app.client.chat.postMessage({
+    text,
     token: context.botToken,
     channel: OWNER_CHANNEL_ID,
-    text: `<#${event.channel}> が閉まったようだのぉ`,
   });
 });
 app.event('channel_unarchive', async ({ event, context }) => {
   console.log('channel_unarchive', { event, context });
+  const conv = conversations.get(event.channel);
+  if (!conv) { throw new Error(`Unknown channel: ${event.channel}`); }
+  const text = `<#${event.channel}> が開いたようだのぉ`;
   await app.client.chat.postMessage({
+    text,
     token: context.botToken,
     channel: OWNER_CHANNEL_ID,
-    text: `<#${event.channel}> が開いたようだのぉ`,
   });
 });
 app.event('channel_created', async ({ event, context }) => {
   console.log('channel_created', event);
+  const text = `<#${event.channel.id}> が新しくできたようだのぉ`;
   await app.client.chat.postMessage({
+    text,
     token: context.botToken,
     channel: OWNER_CHANNEL_ID,
-    text: `<#${event.channel}> が新しくできたようだのぉ`,
   });
+  if (event.channel.name.includes('takayukioda')) {
+    await app.client.conversations.join({
+      token: context.botToken,
+      channel: event.channel.id,
+    });
+  }
 });
 app.event('channel_deleted', async ({ event, context }) => {
-  console.log('channel_deleted', event);
+  console.log('channel_deleted', { event, context });
+  const conv = conversations.get(event.channel);
+  if (!conv) { throw new Error(`Unknown channel: ${event.channel}`); }
+  const text = 'どこかでチャンネルが消えたようだのぉ';
   await app.client.chat.postMessage({
+    text,
     token: context.botToken,
     channel: OWNER_CHANNEL_ID,
-    text: `<#${event.channel}> が消えたようだのぉ`,
   });
 });
-app.event('channel_left', ({ event }) => {
-  console.log('channel_left', event);
+app.event('channel_left', async ({ event, context }) => {
+  console.log('channel_left', { event, context });
+  // If bot left by its choice, let it be.
+  if (event.actor_id === context.botUserId) { return; }
+  await app.client.conversations.join({
+    token: process.env.SLACK_BOT_TOKEN,
+    channel: event.channel,
+  }).catch((error) => {
+    // It will fail this left event happened by channel archive
+    console.log(error.code, error.data.error);
+  });
 });
 app.event('channel_rename', async ({ event, context }) => {
   console.log('channel_rename', { event, context });
@@ -167,23 +208,26 @@ app.event('channel_unshared', async ({ event, context }) => {
   await app.start(process.env.PORT || 3000);
   const conv_opts = {
     token: process.env.SLACK_BOT_TOKEN,
-    exclude_archived: true,
+    exclude_archived: false,
     limit: 100,
-  }
+  };
 
   // Interface for `page`: https://api.slack.com/methods/conversations.list#response
   for await (const page of app.client.paginate('conversations.list', conv_opts) as AsyncIterableIterator<WebAPICallResult>) {
     if (!page.ok) {
-      throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`)
+      throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`);
     }
-    const channels = page.channels as Conversation[]
-    conversations.push(...channels)
+    const channels = page.channels as Conversation[];
+    channels.reduce((c, conv) => {
+      c.set(conv.id, conv);
+      return c;
+    }, conversations);
   }
-  const newJoins = conversations
+
+  const newJoins = Array.from(conversations.values())
     .filter(conv => !conv.is_member && conv.is_channel && !conv.is_archived && !conv.is_shared)
     .map(conv => {
-      if (conv.name.startsWith('rss-')) {
-        console.log(conv)
+      if (conv.name.startsWith('rss-') || conv.name.includes('takayukioda')) {
         return app.client.conversations.join({
           token: process.env.SLACK_BOT_TOKEN,
           channel: conv.id,
@@ -194,18 +238,19 @@ app.event('channel_unshared', async ({ event, context }) => {
   const user_opts = {
     token: process.env.SLACK_BOT_TOKEN,
     limit: 100,
-  }
+  };
+
   for await (const page of app.client.paginate('users.list', user_opts) as AsyncIterableIterator<WebAPICallResult>) {
     if (!page.ok) {
-      throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`)
+      throw new Error(`conversations.list was not ok for some reason: ${page.response_metadata}`);
     }
-    const members = page.members as User[]
+    const members = page.members as User[];
     members.reduce((m, member) => {
       m.set(member.id, member);
       return m;
     }, users);
   }
 
-  await Promise.all(newJoins)
+  await Promise.all(newJoins);
   console.log('⚡️ Bolt app is running!');
 })();
