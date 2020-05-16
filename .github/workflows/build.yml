@@ -10,5 +10,9 @@ jobs:
       - uses: actions/setup-node@v1
         with:
           node-version: "12.x"
-      - run: npm install
-      - run: npm run build
+      - uses: docker/build-push-action@v1
+        with:
+          repository: givery/prince-shotoku
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          tag_with_ref: true
