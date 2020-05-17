@@ -1,10 +1,11 @@
 {
   "family": "bot-prince-shotoku",
+  "executionRoleArn": "*****",
   "requiresCompatibilities": ["EC2"],
   "networkMode": "awsvpc",
   "containerDefinitions": [{
     "name": "main",
-    "image": "",
+    "image": "*****",
     "cpu": 256,
     "memory": 512,
     "portMappings": [{
@@ -25,8 +26,8 @@
       "name": "NODE_ENV",
       "value": "production"
     }, {
-      "name": "PORT",
-      "value": "3010"
+    "name": "PORT",
+    "value": "3010"
     }],
     "secrets": [{
       "name": "OWNER_CHANNEL_ID",
@@ -37,10 +38,10 @@
     }, {
       "name": "SLACK_SIGNING_SECRET",
       "valueFrom": "prince-shotoku.slack-signing-secret"
-    }],
-    "tag": [{
-      "key": "repository",
-      "value": "github.com/givery-technology/prince-shotoku"
     }]
+  }],
+  "tags": [{
+    "key": "repository",
+    "value": "github.com/givery-technology/prince-shotoku"
   }]
 }
