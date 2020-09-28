@@ -29,7 +29,7 @@ const app = new App({
   logLevel: LogLevel.INFO,
 });
 
-app.error((error) => {
+app.error(async (error) => {
   console.error(error);
 });
 
